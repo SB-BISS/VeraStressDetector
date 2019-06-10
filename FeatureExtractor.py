@@ -37,13 +37,14 @@ import pickle
 
 class FeatureExtractor:
 
-    def __init__(self, filename_mean_sd, BIT_PRECISION=8):
+    def __init__(self, filename_mean_sd, BIT_PRECISION=8, sampling_rate=8000):
         # load weights
         #self.dictionary = pickle.load(open(filename_mean_sd, "rb"))
         self.dictionary = pd.read_csv(open(filename_mean_sd, "rb")).to_dict('list')
         self.mean_train = self.dictionary.get("mean")
         self.sd_train = self.dictionary.get("sd")
         self.BIT_PRECISION=BIT_PRECISION
+        self.sampling_rate=8000
 
     #Helper method
     #assumption, we save a file somewhere.
@@ -69,7 +70,10 @@ class FeatureExtractor:
         #print len(x)
         # Fs=16000
 
-        features = audioFeatureExtraction.stFeatureExtraction(x, Fs, 0.05 * Fs, 0.025 * Fs)
+        features = audioFeatureExtraction.stFeatureExtraction(x, Fs, 0.05 * Fs, 0.025 * Fs)[0]
+        index_nan=np.isnan(features)
+        features[index_nan]=0
+        #print(np.shape((features[0])))
         if len(features) == 0:
             features = np.zeros((34, 2))
 
@@ -102,7 +106,7 @@ class FeatureExtractor:
 
         #features = np.mean(features, axis=1)
         features = np.asarray(features).reshape(len(features), -1).transpose()
-        print len(features)
+        print(len(features))
         # features_complete = np.append(features_complete, features, axis=0)
         return features  # _complete
 
@@ -130,19 +134,25 @@ class FeatureExtractor:
     def split_song(self, song):
         mydict = []
         convers = []
-
+        
         for i in range(3000, len(song)+3000, 3000):
             # print i
-            splitting = song[i - 3000:i]  # first three seconds
-            bit_depth = splitting.sample_width * self.BIT_PRECISION
-            # print splitting.frame_rate
-            array_type = get_array_type(bit_depth)
-            numeric_array = array.array(array_type, splitting._data)
-            numeric_array = numeric_array.tolist()
-            features = self.extract_features2(splitting.frame_rate, np.asarray(numeric_array))[0]
-            features_transformed = (features - self.mean_train) / self.sd_train
-            convers.append(features_transformed)
-            #if len(convers) == 3:
+            try:
+                splitting = song[i - 3000:i]  # first three seconds
+                bit_depth = splitting.sample_width * self.BIT_PRECISION
+                # print splitting.frame_rate
+                array_type = get_array_type(bit_depth)
+                print(len(splitting._data))
+                print(array_type)
+                numeric_array = array.array(array_type, splitting._data)
+                numeric_array = numeric_array.tolist()
+                #print(splitting.frame_rate)
+                features = self.extract_features2(self.sampling_rate, np.asarray(numeric_array))[0]
+                features_transformed = (features - self.mean_train) / self.sd_train
+                convers.append(features_transformed)
+            except:
+                continue
+                #if len(convers) == 3:
             #    prediction = self.my_attention_network.predict(np.array([convers]))[0]
                 # print prediction
             #    mydict.append({"Anger": prediction[0], "Disgust": prediction[1], "Fear": prediction[3],
